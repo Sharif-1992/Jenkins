@@ -1,26 +1,16 @@
 #!/bin/bash
-set -e
+sudo apt-get update -y
+sudo apt-get install -y gnupg2 curl openjdk-11-jdk
 
-# Update system and install Java
-apt-get update -y
-apt-get install -y openjdk-11-jdk curl gnupg2
+# Add Jenkins GPG key and repository
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://pkg.jenkins.io/debian/jenkins.io-2023.key | sudo tee /etc/apt/keyrings/jenkins-keyring.asc > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
 
-# Add Jenkins repo and key
-curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io.key | tee \
-    /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+# Install Jenkins
+sudo apt-get update -y
+sudo apt-get install -y jenkins
 
-echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
-    https://pkg.jenkins.io/debian-stable binary/ | tee \
-    /etc/apt/sources.list.d/jenkins.list > /dev/null
-
-apt-get update -y
-apt-get install -y jenkins net-tools
-
-# Reload systemd and try to start Jenkins service
-systemctl daemon-reexec || true
-systemctl daemon-reload
-systemctl enable jenkins
-systemctl restart jenkins
-
-# Confirm Jenkins status
-systemctl status jenkins || journalctl -xeu jenkins.service
+# Enable and start Jenkins
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
