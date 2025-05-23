@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        TF_WORKING_DIR = 'Jenkins'  // Updated path to match your repo structure
+        TF_WORKING_DIR = 'Jenkins'
     }
 
     stages {
