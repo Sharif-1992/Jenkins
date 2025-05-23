@@ -59,8 +59,14 @@ ${backticks}
 
                             // Auto reject PR logic
                             if (warningCount > 1 || errorCount > 0) {
+                            // ✅ Close the PR
                                 sh """
-                                    gh pr close ${prNumber} --repo Sharif-1992/Azure --comment '❌ This PR has been automatically closed due to TFLint issues. Please fix them and open a new PR.'
+                                    gh pr close ${prNumber} --repo Sharif-1992/Azure
+                                """
+
+                            // ✅ Add a follow-up comment
+                                sh """
+                                    gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '❌ This PR has been automatically closed due to TFLint issues. Please fix them and reopen or create a new PR.'
                                 """
                             }
                         }
