@@ -15,7 +15,7 @@ pipeline {
         stage('Run TFLint') {
             steps {
                 script {
-                    def lintOutput = sh(script: 'tflint --format=compact || true', returnStdout: true).trim()
+                    def lintOutput = sh(script: 'tflint --format=github || true', returnStdout: true).trim()
 
                     echo "TFLint Output:\n${lintOutput}"
 
