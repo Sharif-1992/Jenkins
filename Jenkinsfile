@@ -21,7 +21,7 @@ pipeline {
 
                     def prNumber = env.CHANGE_ID
                     if (prNumber) {
-                        def comment = """### 🧪 TFLint Report ${lintOutput.take(6000)}"""
+                        def comment = """### TFLint Report ${lintOutput.take(6000)}"""
                         sh """
                             gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '${comment}'
                         """
