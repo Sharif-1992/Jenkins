@@ -1,52 +1,26 @@
 pipeline {
     agent any
 
-    environment {
-        TF_WORKING_DIR = 'Jenkins'
-    }
-
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Install TFLint') {
-            steps {
-                sh '''
-                    curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-                    tflint --version
-                '''
-            }
-        }
-
         stage('Initialize TFLint') {
             steps {
-                dir("${env.TF_WORKING_DIR}") {
-                    sh 'tflint --init || true'  // TFLint init is optional unless using plugins
-                }
+                sh 'tflint --init'
             }
         }
 
         stage('Run TFLint') {
             steps {
-                dir("${env.TF_WORKING_DIR}") {
-                    sh 'tflint -f compact'
-                }
+                sh 'tflint'
             }
         }
     }
 
     post {
-        success {
-            echo '✅ TFLint check passed!'
+        always {
+            echo '🔍 TFLint scan completed.'
         }
         failure {
             echo '❌ TFLint check failed!'
-        }
-        always {
-            echo '🔍 TFLint scan completed.'
         }
     }
 }
