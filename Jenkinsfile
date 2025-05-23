@@ -2,23 +2,33 @@ pipeline {
     agent any
 
     environment {
-        GH_TOKEN = credentials('github-token') // Your GitHub token stored in Jenkins credentials
+        GH_TOKEN = credentials('github-pat') // GitHub Personal Access Token stored in Jenkins credentials
     }
 
     stages {
-        stage('Post PR Comment') {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Run TFLint') {
             steps {
                 script {
-                    // Extract PR number from environment or change manually
-                    def prNumber = env.CHANGE_ID
+                    def lintOutput = sh(script: 'tflint --format=compact || true', returnStdout: true).trim()
 
+                    echo "TFLint Output:\n${lintOutput}"
+
+                    def prNumber = env.CHANGE_ID
                     if (prNumber) {
+                        def comment = """### 🧪 TFLint Report
+\`\`\`
+${lintOutput.take(6000)}
+\`\`\`
+"""
                         sh """
-                            echo "Posting comment to PR #${prNumber}"
-                            gh pr comment ${prNumber} --repo Sharif-1992/Azure --body 'Hello from Jenkins!'
+                            gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '${comment}'
                         """
-                    } else {
-                        echo "No PR number found. Not a PR build."
                     }
                 }
             }
