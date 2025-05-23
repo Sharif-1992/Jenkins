@@ -32,11 +32,11 @@ pipeline {
                         def warningCount = 0
                         def errorCount = 0
 
-                        lintOutput.eachLine { line ->
-                            if (line =~ /Warning:/) {
+                        lintOutput.split('\n').each{ line ->
+                            if (line.contains("Warning:")) {
                                 warningCount++
                             }
-                            if (line =~ /Error:/) {
+                            if (line.contains("Error:")) {
                                 errorCount++
                             }
                         }
