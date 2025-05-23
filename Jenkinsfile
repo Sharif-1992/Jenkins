@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        GH_TOKEN = credentials('github-pat') // Your GitHub token stored in Jenkins credentials
+        GH_TOKEN = credentials('github-token') // Your GitHub token stored in Jenkins credentials
     }
 
     stages {
