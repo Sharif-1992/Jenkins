@@ -13,12 +13,15 @@ pipeline {
         }
         stage('Initialize TFLint Plugins') {
             steps {
+              dir('Jenkins'){
                 sh 'tflint --init'
+                }
             }
         }
 
         stage('Run TFLint') {
             steps {
+              dir('Jenkins'){
                 script {
                     def lintOutput = sh(script: 'tflint --format=default || true', returnStdout: true).trim()
 
@@ -31,6 +34,7 @@ pipeline {
                             gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '${comment}'
                         """
                     }
+                  }
                 }
             }
         }
