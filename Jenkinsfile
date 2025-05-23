@@ -2,9 +2,8 @@ pipeline {
   agent any
 
   environment {
-    GH_TOKEN = credentials('github-token') // create a Jenkins secret with your GitHub PAT
-    REPO = "Sharif-1992/Azure"
-    PR_NUMBER = sh(script: "gh pr view --json number -q .number", returnStdout: true).trim()
+    TFLINT_THRESHOLD = '2'
+    GH_REPO = 'Sharif-1992/Azure' // Update if needed
   }
 
   stages {
@@ -24,34 +23,57 @@ pipeline {
     stage('Parse Issues') {
       steps {
         script {
-          def issueCount = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim().toInteger()
-          currentBuild.description = "TFLint found ${issueCount} issue(s)"
-          env.TFLINT_ISSUE_COUNT = issueCount.toString()
+          def issueCount = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim()
+          echo "TFLint reported ${issueCount} issue(s)."
+          currentBuild.description = "TFLint Issues: ${issueCount}"
 
-          def summary = sh(
-            script: '''
-              if [ "$TFLINT_ISSUE_COUNT" -eq 0 ]; then
-                echo "✅ TFLint found no issues."
-              else
-                jq -r '.issues[] | "- [\(.severity)] \(.message) (\(.range.filename):\(.range.start.line))"' tflint_output.json
-              fi
-            ''',
-            returnStdout: true
-          ).trim()
-
-          writeFile file: 'tflint_summary.txt', text: summary
+          // Instead of error(), just mark build as failure but continue
+          if (issueCount.toInteger() > env.TFLINT_THRESHOLD.toInteger()) {
+            currentBuild.result = 'FAILURE'
+            // Set a flag to use in next stage
+            env.TFLINT_FAIL = 'true'
+          } else {
+            env.TFLINT_FAIL = 'false'
+          }
         }
       }
     }
 
     stage('Comment on PR') {
+      when {
+        expression { env.CHANGE_ID != null }
+      }
       steps {
         script {
-          def body = new File('tflint_summary.txt').text
+          sh '''
+            jq -r '.issues[] | "- [" + .severity + "] " + .message + " (" + .range.filename + ":" + (.range.start.line|tostring) + ")"' tflint_output.json > tflint_summary.txt || true
+          '''
+          def issueSummary = readFile('tflint_summary.txt').trim()
+          def totalIssues = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim()
+
+          def commentBody = ""
+
+          if (env.TFLINT_FAIL == 'true') {
+            commentBody = """\
+🛑 **TFLint Scan Report - FAILED**
+Total Issues: ${totalIssues}
+
+${issueSummary.take(3000)}
+"""
+          } else {
+            commentBody = """\
+✅ **TFLint Scan Report - PASSED**
+Total Issues: ${totalIssues}
+
+No critical issues found. Good job! 🎉
+"""
+          }
+
+          // Write comment body to file and post to avoid escaping problems
+          writeFile file: 'comment_body.md', text: commentBody
+
           sh """
-            gh pr comment ${env.PR_NUMBER} \\
-              --repo ${env.REPO} \\
-              --body "### 🧪 TFLint Scan Result\\n${body.replaceAll('"', '\\"')}"
+            gh pr comment ${CHANGE_ID} --repo ${GH_REPO} --body-file comment_body.md
           """
         }
       }
@@ -59,14 +81,11 @@ pipeline {
   }
 
   post {
-    failure {
-      echo '❌ Build failed'
-    }
     success {
-      echo '✅ Build succeeded'
+      echo "✅ TFLint check passed."
     }
-    always {
-      echo "🔁 Commented on PR #${env.PR_NUMBER}"
+    failure {
+      echo "❌ TFLint check failed."
     }
   }
 }
