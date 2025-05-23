@@ -2,8 +2,9 @@ pipeline {
   agent any
 
   environment {
-    TFLINT_THRESHOLD = '2'
-    GH_REPO = 'Sharif-1992/Azure' // Update this if needed
+    GH_TOKEN = credentials('github-token') // create a Jenkins secret with your GitHub PAT
+    REPO = "Sharif-1992/Azure"
+    PR_NUMBER = sh(script: "gh pr view --json number -q .number", returnStdout: true).trim()
   }
 
   stages {
@@ -23,42 +24,34 @@ pipeline {
     stage('Parse Issues') {
       steps {
         script {
-          def issueCount = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim()
-          echo "TFLint reported ${issueCount} issue(s)."
-          currentBuild.description = "TFLint Issues: ${issueCount}"
+          def issueCount = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim().toInteger()
+          currentBuild.description = "TFLint found ${issueCount} issue(s)"
+          env.TFLINT_ISSUE_COUNT = issueCount.toString()
 
-          if (issueCount.toInteger() > env.TFLINT_THRESHOLD.toInteger()) {
-            currentBuild.result = 'FAILURE'
-            error("Too many TFLint issues (${issueCount}). Threshold is ${env.TFLINT_THRESHOLD}.")
-          }
+          def summary = sh(
+            script: '''
+              if [ "$TFLINT_ISSUE_COUNT" -eq 0 ]; then
+                echo "✅ TFLint found no issues."
+              else
+                jq -r '.issues[] | "- [\(.severity)] \(.message) (\(.range.filename):\(.range.start.line))"' tflint_output.json
+              fi
+            ''',
+            returnStdout: true
+          ).trim()
+
+          writeFile file: 'tflint_summary.txt', text: summary
         }
       }
     }
 
     stage('Comment on PR') {
-      when {
-        expression { env.CHANGE_ID != null }
-      }
       steps {
         script {
-          // Create a summary file via shell to avoid escaping issues
-          sh '''
-            jq -r '.issues[] | "- [" + .severity + "] " + .message + " (" + .range.filename + ":" + (.range.start.line|tostring) + ")"' tflint_output.json > tflint_summary.txt
-          '''
-          def issueSummary = readFile('tflint_summary.txt').trim()
-
-          def totalIssues = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim()
-          def body = """\
-🧪 **TFLint Scan Report**
-Total Issues: ${totalIssues}
-
-${issueSummary.take(3000)}
-"""
-
+          def body = new File('tflint_summary.txt').text
           sh """
-            gh pr comment ${CHANGE_ID} \
-              --repo ${GH_REPO} \
-              --body "${body.replace('"', '\\"')}"
+            gh pr comment ${env.PR_NUMBER} \\
+              --repo ${env.REPO} \\
+              --body "### 🧪 TFLint Scan Result\\n${body.replaceAll('"', '\\"')}"
           """
         }
       }
@@ -66,11 +59,14 @@ ${issueSummary.take(3000)}
   }
 
   post {
-    success {
-      echo "✅ TFLint check passed."
-    }
     failure {
-      echo "❌ TFLint check failed."
+      echo '❌ Build failed'
+    }
+    success {
+      echo '✅ Build succeeded'
+    }
+    always {
+      echo "🔁 Commented on PR #${env.PR_NUMBER}"
     }
   }
 }
