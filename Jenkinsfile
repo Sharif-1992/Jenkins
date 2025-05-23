@@ -1,52 +1,41 @@
-pipeline {
-    agent any
+stage('Comment on PR') {
+  when {
+    expression { env.CHANGE_ID != null }
+  }
+  steps {
+    script {
+      withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+        sh '''
+          jq -r '.issues[] | "- [" + .severity + "] " + .message + " (" + .range.filename + ":" + (.range.start.line|tostring) + ")"' tflint_output.json > tflint_summary.txt || true
+        '''
+        def issueSummary = readFile('tflint_summary.txt').trim()
+        def totalIssues = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim()
 
-    environment {
-        TF_WORKING_DIR = 'Jenkins'
+        def commentBody = ""
+
+        if (env.TFLINT_FAIL == 'true') {
+          commentBody = """\
+🛑 **TFLint Scan Report - FAILED**
+Total Issues: ${totalIssues}
+
+${issueSummary.take(3000)}
+"""
+        } else {
+          commentBody = """\
+✅ **TFLint Scan Report - PASSED**
+Total Issues: ${totalIssues}
+
+No critical issues found. Good job! 🎉
+"""
+        }
+
+        writeFile file: 'comment_body.md', text: commentBody
+
+        sh '''
+          echo $GITHUB_TOKEN | gh auth login --with-token
+          gh pr comment ${CHANGE_ID} --repo ${GH_REPO} --body-file comment_body.md
+        '''
+      }
     }
-
-    stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Install TFLint') {
-            steps {
-                sh '''
-                    curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-                    tflint --version
-                '''
-            }
-        }
-
-        stage('Initialize TFLint') {
-            steps {
-                dir("${env.TF_WORKING_DIR}") {
-                    sh 'tflint --init || true'  // TFLint init is optional unless using plugins
-                }
-            }
-        }
-
-        stage('Run TFLint') {
-            steps {
-                dir("${env.TF_WORKING_DIR}") {
-                    sh 'tflint -f compact'
-                }
-            }
-        }
-    }
-
-    post {
-        success {
-            echo '✅ TFLint check passed!'
-        }
-        failure {
-            echo '❌ TFLint check failed!'
-        }
-        always {
-            echo '🔍 TFLint scan completed.'
-        }
-    }
+  }
 }
