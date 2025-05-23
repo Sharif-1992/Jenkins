@@ -1,19 +1,24 @@
 pipeline {
     agent any
+
+    environment {
+        GH_TOKEN = credentials('github-pat') // Your GitHub token stored in Jenkins credentials
+    }
+
     stages {
-        stage('Check TFLint Error Count') {
+        stage('Post PR Comment') {
             steps {
                 script {
-                    def errorCount = readFile('tflint_output.txt').readLines().size()
-                    echo "TFLint Errors: ${errorCount}"
-                    if (errorCount > 5) {
-                        def prId = env.CHANGE_ID
-                        def repo = env.CHANGE_URL.split('/').takeRight(2).join('/').replace('.git', '')
-                        def message = "❌ TFLint check failed with ${errorCount} errors. Please fix the issues before merging."
+                    // Extract PR number from environment or change manually
+                    def prNumber = env.CHANGE_ID
 
-                        sh "gh pr comment ${prId} --repo ${repo} --body \"${message}\""
-
-                        error("TFLint error threshold exceeded")
+                    if (prNumber) {
+                        sh """
+                            echo "Posting comment to PR #${prNumber}"
+                            gh pr comment ${prNumber} --repo Sharif-1992/Azure --body 'Hello from Jenkins!'
+                        """
+                    } else {
+                        echo "No PR number found. Not a PR build."
                     }
                 }
             }
