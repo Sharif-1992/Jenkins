@@ -11,6 +11,11 @@ pipeline {
                 checkout scm
             }
         }
+        stage('Initialize TFLint Plugins') {
+            steps {
+                sh 'tflint --init'
+            }
+        }
 
         stage('Run TFLint') {
             steps {
