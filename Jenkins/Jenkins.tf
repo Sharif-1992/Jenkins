@@ -1,7 +1,7 @@
 
 resource "azurerm_resource_group" "rg" {
   name     = "jenkins-rg"
-  #location = "East US"
+  location = "East US"
 }
 
 resource "azurerm_virtual_network" "vnet" {
