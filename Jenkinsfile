@@ -1,41 +1,70 @@
-stage('Comment on PR') {
-  when {
-    expression { env.CHANGE_ID != null }
-  }
-  steps {
-    script {
-      withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-        sh '''
-          jq -r '.issues[] | "- [" + .severity + "] " + .message + " (" + .range.filename + ":" + (.range.start.line|tostring) + ")"' tflint_output.json > tflint_summary.txt || true
-        '''
-        def issueSummary = readFile('tflint_summary.txt').trim()
-        def totalIssues = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim()
+pipeline {
+    agent any
 
-        def commentBody = ""
+    environment {
+        GH_TOKEN = credentials('github-token') // GitHub Personal Access Token stored in Jenkins credentials
+    }
 
-        if (env.TFLINT_FAIL == 'true') {
-          commentBody = """\
-🛑 **TFLint Scan Report - FAILED**
-Total Issues: ${totalIssues}
-
-${issueSummary.take(3000)}
-"""
-        } else {
-          commentBody = """\
-✅ **TFLint Scan Report - PASSED**
-Total Issues: ${totalIssues}
-
-No critical issues found. Good job! 🎉
-"""
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Initialize TFLint Plugins') {
+            steps {
+                dir('Jenkins') {
+                    sh 'tflint --init'
+                }
+            }
         }
 
-        writeFile file: 'comment_body.md', text: commentBody
+        stage('Run TFLint') {
+            steps {
+                dir('Jenkins') {
+                    script {
+                        // Run TFLint and capture output
+                        def lintOutput = sh(script: 'tflint --format=default || true', returnStdout: true).trim()
 
-        sh '''
-          echo $GITHUB_TOKEN | gh auth login --with-token
-          gh pr comment ${CHANGE_ID} --repo ${GH_REPO} --body-file comment_body.md
-        '''
-      }
+                        echo "TFLint Output:\n${lintOutput}"
+
+                        // Count warnings and errors from output
+                        def warningCount = 0
+                        def errorCount = 0
+
+                        lintOutput.split('\n').each{ line ->
+                            if (line.contains("Warning:")) {
+                                warningCount++
+                            }
+                            if (line.contains("Error:")) {
+                                errorCount++
+                            }
+                        }
+
+                        def backticks = '```'
+                        def prNumber = env.CHANGE_ID
+                        if (prNumber) {
+                            def comment = """### TFLint Report
+
+${backticks}
+${lintOutput.take(6000)}
+${backticks}
+
+- ❗ Warnings: ${warningCount}
+- ❌ Errors: ${errorCount}
+"""
+                            sh """
+                                gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '${comment}'
+                            """
+
+                            // Auto reject logic
+                            if (warningCount > 1 || errorCount > 0) {
+                                error("PR rejected due to TFLint issues: Warnings=${warningCount}, Errors=${errorCount}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
-  }
 }
