@@ -2,8 +2,8 @@ pipeline {
   agent any
 
   environment {
-    TFLINT_THRESHOLD = '10'  // Maximum allowed issues
-    GH_REPO = 'Sharif-1992/Azure' // Change to your GitHub repo (owner/repo)
+    TFLINT_THRESHOLD = '2'
+    GH_REPO = 'Sharif-1992/Azure' // Update this if needed
   }
 
   stages {
@@ -41,18 +41,24 @@ pipeline {
       }
       steps {
         script {
-          def issueSummary = sh(script: "jq -r '.issues[] | \"- [\(.severity)] \(.message) (\(.range.filename):\(.range.start.line))\"' tflint_output.json", returnStdout: true).trim()
-          def body = """
-          🧪 **TFLint Scan Report**
-          Total Issues: $(jq '.issues | length' tflint_output.json)
+          // Create a summary file via shell to avoid escaping issues
+          sh '''
+            jq -r '.issues[] | "- [" + .severity + "] " + .message + " (" + .range.filename + ":" + (.range.start.line|tostring) + ")"' tflint_output.json > tflint_summary.txt
+          '''
+          def issueSummary = readFile('tflint_summary.txt').trim()
 
-          ${issueSummary.take(3000)}  // Trim if too long
-          """
+          def totalIssues = sh(script: "jq '.issues | length' tflint_output.json", returnStdout: true).trim()
+          def body = """\
+🧪 **TFLint Scan Report**
+Total Issues: ${totalIssues}
+
+${issueSummary.take(3000)}
+"""
 
           sh """
             gh pr comment ${CHANGE_ID} \
               --repo ${GH_REPO} \
-              --body '${body.replace("'", "'\\''")}'
+              --body "${body.replace('"', '\\"')}"
           """
         }
       }
