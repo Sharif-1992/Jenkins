@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        GH_TOKEN = credentials('github-token') // GitHub token stored in Jenkins
+        GH_TOKEN = credentials('github-token') // GitHub Personal Access Token stored in Jenkins credentials
     }
 
     stages {
@@ -11,7 +11,6 @@ pipeline {
                 checkout scm
             }
         }
-
         stage('Initialize TFLint Plugins') {
             steps {
                 dir('Jenkins') {
@@ -24,36 +23,43 @@ pipeline {
             steps {
                 dir('Jenkins') {
                     script {
+                        // Run TFLint and capture output
                         def lintOutput = sh(script: 'tflint --format=default || true', returnStdout: true).trim()
+
                         echo "TFLint Output:\n${lintOutput}"
 
-                        // Count warnings and errors
-                        def warningCount = lintOutput.readLines().count { it.contains("Warning:") }
-                        def errorCount = lintOutput.readLines().count { it.contains("Error:") }
+                        // Count warnings and errors from output
+                        def warningCount = 0
+                        def errorCount = 0
 
-                        echo "Warning count: ${warningCount}"
-                        echo "Error count: ${errorCount}"
+                        lintOutput.eachLine { line ->
+                            if (line =~ /Warning:/) {
+                                warningCount++
+                            }
+                            if (line =~ /Error:/) {
+                                errorCount++
+                            }
+                        }
 
+                        def backticks = '```'
                         def prNumber = env.CHANGE_ID
                         if (prNumber) {
                             def comment = """### TFLint Report
 
-\`\`\`
+${backticks}
 ${lintOutput.take(6000)}
-\`\`\`
+${backticks}
 
 - ❗ Warnings: ${warningCount}
 - ❌ Errors: ${errorCount}
 """
+                            sh """
+                                gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '${comment}'
+                            """
 
-                            // Post comment on PR
-                            sh """gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '${comment}'"""
-
-                            // Close PR if thresholds are exceeded
+                            // Auto reject logic
                             if (warningCount > 1 || errorCount > 0) {
-                                def rejectMsg = "PR auto-closed: TFLint failed (Warnings: ${warningCount}, Errors: ${errorCount}). Please fix the issues."
-                                sh """gh pr close ${prNumber} --repo Sharif-1992/Azure --comment '${rejectMsg}'"""
-                                error("PR closed due to TFLint issues.")
+                                error("PR rejected due to TFLint issues: Warnings=${warningCount}, Errors=${errorCount}")
                             }
                         }
                     }
