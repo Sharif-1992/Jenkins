@@ -3,6 +3,10 @@ pipeline {
 
     environment {
         PATH = "/usr/local/bin:${env.PATH}"
+        TF_VAR_subscription_id = credentials('azure-subscription-id')
+        TF_VAR_client_id       = credentials('azure-client-id')
+        TF_VAR_client_secret   = credentials('azure-client-secret')
+        TF_VAR_tenant_id       = credentials('azure-tenant-id')
     }
 
     stages {
