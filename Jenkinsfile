@@ -33,6 +33,10 @@ pipeline {
 
                             // Run Terratest with TF variable pointing to the injected SSH public key
                             sh '''
+                                echo "TF_VAR_client_id=$CLIENT_ID"
+                                echo "TF_VAR_tenant_id=$TENANT_ID"
+                                echo "TF_VAR_subscription_id=$SUBSCRIPTION_ID"
+                                
                                 export TF_VAR_public_key_path=$PUB_KEY
                                 export TF_VAR_client_id=$CLIENT_ID
                                 export TF_VAR_client_secret=$CLIENT_SECRET
