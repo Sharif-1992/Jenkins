@@ -42,6 +42,8 @@ pipeline {
                                 export TF_VAR_client_secret=$CLIENT_SECRET
                                 export TF_VAR_tenant_id=$TENANT_ID
                                 export TF_VAR_subscription_id=$SUBSCRIPTION_ID
+                                terraform init
+                                terraform plan
                                 go test -v
                             '''
                         }
