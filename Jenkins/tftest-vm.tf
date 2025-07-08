@@ -1,8 +1,3 @@
-variable "public_key_path" {
-  description = "Path to the SSH public key"
-  type        = string
-}
-
 resource "azurerm_network_interface" "tftest_nic" {
   name                = "tftest-nic"
   location            = azurerm_resource_group.rg.location
