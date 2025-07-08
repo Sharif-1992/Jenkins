@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        GH_TOKEN = credentials('github-token') // GitHub Personal Access Token stored in Jenkins credentials
+        GH_TOKEN = credentials('github-token') // GitHub PAT stored in Jenkins credentials
     }
 
     stages {
@@ -11,64 +11,38 @@ pipeline {
                 checkout scm
             }
         }
-        stage('Initialize TFLint Plugins') {
-            steps {
-                dir('Jenkins') {
-                    sh 'tflint --init'
-                }
-            }
-        }
 
-        stage('Run TFLint') {
+        stage('Run Terratest') {
             steps {
-                dir('Jenkins') {
+                dir('tests') {
                     script {
-                        // Run TFLint and capture output
-                        def lintOutput = sh(script: 'tflint --format=default || true', returnStdout: true).trim()
+                        // Initialize Go module (first time only)
+                        sh 'go mod init tests || true'
+                        // Install Terratest dependency
+                        sh 'go get github.com/gruntwork-io/terratest/modules/terraform'
 
-                        echo "TFLint Output:\n${lintOutput}"
-
-                        // Count warnings and errors from output
-                        def warningCount = 0
-                        def errorCount = 0
-
-                        lintOutput.split('\n').each{ line ->
-                            if (line.contains("Warning:")) {
-                                warningCount++
-                            }
-                            if (line.contains("Error:")) {
-                                errorCount++
-                            }
-                        }
-
-                        def backticks = '```'
+                        // Run tests and capture output
+                        def output = sh(script: 'go test -v || true', returnStdout: true).trim()
+                        def failed = output.contains("--- FAIL")
                         def prNumber = env.CHANGE_ID
+
+                        echo "Terratest Output:\n${output}"
+
                         if (prNumber) {
-                            def comment = """### TFLint Report
+                            def comment = """### ✅ Terratest Report
 
-${backticks}
-${lintOutput.take(6000)}
-${backticks}
+\`\`\`
+${output.take(6000)}
+\`\`\`
 
-- ❗ Warnings: ${warningCount}
-- ❌ Errors: ${errorCount}
+- Status: ${failed ? "❌ Failed" : "✔️ Passed"}
 """
+
+                            // Post PR comment using GitHub CLI
                             sh """
+                                echo \$GH_TOKEN | gh auth login --with-token
                                 gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '${comment}'
                             """
-
-                            // Auto reject PR logic
-                            if (warningCount > 1 || errorCount > 0) {
-                            // ✅ Close the PR
-                                sh """
-                                    gh pr close ${prNumber} --repo Sharif-1992/Azure
-                                """
-
-                            // ✅ Add a follow-up comment
-                                sh """
-                                    gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '❌ This PR has been automatically closed due to TFLint issues. Please fix them and reopen or create a new PR.'
-                                """
-                            }
                         }
                     }
                 }
