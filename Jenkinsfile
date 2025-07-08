@@ -3,10 +3,6 @@ pipeline {
 
     environment {
         PATH = "/usr/local/bin:${env.PATH}"
-        TF_VAR_subscription_id = credentials('azure-subscription-id')
-        TF_VAR_client_id       = credentials('azure-client-id')
-        TF_VAR_client_secret   = credentials('azure-client-secret')
-        TF_VAR_tenant_id       = credentials('azure-tenant-id')
     }
 
     stages {
@@ -31,6 +27,10 @@ pipeline {
                             // Run Terratest with TF variable pointing to the injected SSH public key
                             sh '''
                                 export TF_VAR_public_key_path=$PUB_KEY
+                                export TF_VAR_client_id=$TF_VAR_client_id
+                                export TF_VAR_client_secret=$TF_VAR_client_secret
+                                export TF_VAR_tenant_id=$TF_VAR_tenant_id
+                                export TF_VAR_subscription_id=$TF_VAR_subscription_id
                                 go test -v
                             '''
                         }
