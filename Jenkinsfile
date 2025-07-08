@@ -10,7 +10,7 @@ pipeline {
 
         stage('Run Terratest') {
             steps {
-                dir('tests') {
+                dir('terratest') {
                     script {
                         // Initialize Go module (only needed the first time)
                         sh 'go mod init tests || true'
