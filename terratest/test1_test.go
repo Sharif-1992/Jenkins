@@ -7,6 +7,7 @@ import (
 
 func TestTerraformInitApply(t *testing.T) {
 	terraformOptions := &terraform.Options{
+		TerraformBinary: "terraform",
 		TerraformDir: "../Jenkins/", // Root folder with your *.tf files
 	}
 
