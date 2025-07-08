@@ -1,8 +1,9 @@
 pipeline {
     agent any
+
     environment {
-      PATH = "/usr/local/bin:${env.PATH}"
-  }
+        PATH = "/usr/local/bin:${env.PATH}"
+    }
 
     stages {
         stage('Checkout') {
@@ -13,16 +14,22 @@ pipeline {
 
         stage('Run Terratest') {
             steps {
-                dir('terratest') {
-                    script {
-                        // Initialize Go module (only needed the first time)
-                        sh 'go mod init tests || true'
+                // Load the SSH public key from Jenkins credentials (Secret File)
+                withCredentials([file(credentialsId: 'vm_ssh_key_pub', variable: 'PUB_KEY')]) {
+                    dir('terratest') {
+                        script {
+                            // Initialize Go module (skip error if already initialized)
+                            sh 'go mod init tests || true'
 
-                        // Install Terratest module
-                        sh 'go get github.com/gruntwork-io/terratest/modules/terraform'
+                            // Fetch Terratest module
+                            sh 'go get github.com/gruntwork-io/terratest/modules/terraform'
 
-                        // Run Terratest
-                        sh 'go test -v'
+                            // Run Terratest with TF variable pointing to the injected SSH public key
+                            sh '''
+                                export TF_VAR_public_key_path=$PUB_KEY
+                                go test -v
+                            '''
+                        }
                     }
                 }
             }
