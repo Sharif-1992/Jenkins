@@ -25,24 +25,17 @@ pipeline {
 
                     dir('terratest') {
                         script {
-                            // Initialize Go module (skip error if already initialized)
-                            sh 'go mod init tests || true'
+                            // Use go mod tidy to ensure dependencies are up to date
+                            sh 'go mod tidy'
 
-                            // Fetch Terratest module
-                            sh 'go get github.com/gruntwork-io/terratest/modules/terraform'
-
-                            // Run Terratest with TF variable pointing to the injected SSH public key
+                            // Run Terratest with TF variables
                             sh '''
-                                echo "TF_VAR_client_id=$CLIENT_ID"
-                                echo "TF_VAR_tenant_id=$TENANT_ID"
-                                echo "TF_VAR_subscription_id=$SUBSCRIPTION_ID"
-                                
                                 export TF_VAR_public_key_path=$PUB_KEY
                                 export TF_VAR_client_id=$CLIENT_ID
                                 export TF_VAR_client_secret=$CLIENT_SECRET
                                 export TF_VAR_tenant_id=$TENANT_ID
                                 export TF_VAR_subscription_id=$SUBSCRIPTION_ID
-                                go test -v
+                                go test -v -timeout 30m
                             '''
                         }
                     }
