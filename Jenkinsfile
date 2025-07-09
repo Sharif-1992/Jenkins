@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        GH_TOKEN = credentials('github-token') // GitHub Personal Access Token stored in Jenkins credentials
+        PATH = "/usr/local/bin:${env.PATH}"
     }
 
     stages {
@@ -11,56 +11,32 @@ pipeline {
                 checkout scm
             }
         }
-        stage('Initialize TFLint Plugins') {
+
+        stage('Run Terratest') {
             steps {
-                dir('Jenkins') {
-                    sh 'tflint --init'
-                }
-            }
-        }
+                // Load the SSH public key from Jenkins credentials (Secret File)
+                withCredentials([
+                    file(credentialsId: 'vm_ssh_key_pub', variable: 'PUB_KEY'),
+                    string(credentialsId: 'azure-client-id', variable: 'CLIENT_ID'),
+                    string(credentialsId: 'azure-client-secret', variable: 'CLIENT_SECRET'),
+                    string(credentialsId: 'azure-tenant-id', variable: 'TENANT_ID'),
+                    string(credentialsId: 'azure-subscription-id', variable: 'SUBSCRIPTION_ID')
+                ]) {
 
-        stage('Run TFLint') {
-            steps {
-                dir('Jenkins') {
-                    script {
-                        // Run TFLint and capture output
-                        def lintOutput = sh(script: 'tflint --format=default || true', returnStdout: true).trim()
+                    dir('terratest') {
+                        script {
+                            // Use go mod tidy to ensure dependencies are up to date
+                            sh 'go mod tidy'
 
-                        echo "TFLint Output:\n${lintOutput}"
-
-                        // Count warnings and errors from output
-                        def warningCount = 0
-                        def errorCount = 0
-
-                        lintOutput.split('\n').each{ line ->
-                            if (line.contains("Warning:")) {
-                                warningCount++
-                            }
-                            if (line.contains("Error:")) {
-                                errorCount++
-                            }
-                        }
-
-                        def backticks = '```'
-                        def prNumber = env.CHANGE_ID
-                        if (prNumber) {
-                            def comment = """### TFLint Report
-
-${backticks}
-${lintOutput.take(6000)}
-${backticks}
-
-- ❗ Warnings: ${warningCount}
-- ❌ Errors: ${errorCount}
-"""
-                            sh """
-                                gh pr comment ${prNumber} --repo Sharif-1992/Azure --body '${comment}'
-                            """
-
-                            // Auto reject logic
-                            if (warningCount > 1 || errorCount > 0) {
-                                error("PR rejected due to TFLint issues: Warnings=${warningCount}, Errors=${errorCount}")
-                            }
+                            // Run Terratest with TF variables
+                            sh '''
+                                export TF_VAR_public_key_path=$PUB_KEY
+                                export TF_VAR_client_id=$CLIENT_ID
+                                export TF_VAR_client_secret=$CLIENT_SECRET
+                                export TF_VAR_tenant_id=$TENANT_ID
+                                export TF_VAR_subscription_id=$SUBSCRIPTION_ID
+                                go test -v -timeout 30m
+                            '''
                         }
                     }
                 }
